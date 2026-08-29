@@ -7,6 +7,8 @@ class Collector < ApplicationRecord
   has_many :devices, dependent: :destroy
   has_many :readings, through: :devices
   has_many :measurements, through: :devices
+  has_many :victron_slots, dependent: :destroy
+  has_many :victron_discoveries, dependent: :destroy
 
   validates :key_digest, presence: true, uniqueness: true
 

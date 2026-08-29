@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -66,6 +67,44 @@ type ReadingsResponse struct {
 	Readings []Reading `json:"readings"`
 }
 
+type VictronSlot struct {
+	Position         int    `json:"position"`
+	Managed          bool   `json:"managed"`
+	Configured       bool   `json:"configured"`
+	DeviceIdentifier string `json:"device_identifier,omitempty"`
+	Name             string `json:"name,omitempty"`
+	MACAddress       string `json:"mac_address,omitempty"`
+	BindKey          string `json:"bind_key,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
+}
+
+type LoggerConfigResponse struct {
+	OK        bool          `json:"ok"`
+	Logger    string        `json:"logger"`
+	UpdatedAt *string       `json:"updated_at"`
+	Slots     []VictronSlot `json:"slots"`
+}
+
+type SlotResponse struct {
+	OK     bool        `json:"ok"`
+	Logger string      `json:"logger"`
+	Slot   VictronSlot `json:"slot"`
+}
+
+type VictronDiscovery struct {
+	MACAddress string `json:"mac_address"`
+	ProductID  int    `json:"product_id"`
+	RSSI       int    `json:"rssi"`
+	LastSeenAt string `json:"last_seen_at"`
+	Configured bool   `json:"configured"`
+}
+
+type DiscoveriesResponse struct {
+	OK          bool               `json:"ok"`
+	Logger      string             `json:"logger"`
+	Discoveries []VictronDiscovery `json:"discoveries"`
+}
+
 func New(baseURL, key string, httpClient *http.Client) (*Client, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
@@ -113,13 +152,59 @@ func (c *Client) Readings(ctx context.Context, identifier, telemetryRange string
 	return response, err
 }
 
+func (c *Client) LoggerConfig(ctx context.Context, logger string) (LoggerConfigResponse, error) {
+	var response LoggerConfigResponse
+	path := "/api/v1/loggers/" + url.PathEscape(logger) + "/config"
+	err := c.get(ctx, path, &response)
+	return response, err
+}
+
+func (c *Client) ConfigureSlot(ctx context.Context, logger string, position int, slot VictronSlot) (SlotResponse, error) {
+	var response SlotResponse
+	path := fmt.Sprintf("/api/v1/loggers/%s/slots/%d", url.PathEscape(logger), position)
+	err := c.doJSON(ctx, http.MethodPut, path, slot, &response)
+	return response, err
+}
+
+func (c *Client) ClearSlot(ctx context.Context, logger string, position int) (SlotResponse, error) {
+	var response SlotResponse
+	path := fmt.Sprintf("/api/v1/loggers/%s/slots/%d", url.PathEscape(logger), position)
+	err := c.doJSON(ctx, http.MethodDelete, path, nil, &response)
+	return response, err
+}
+
+func (c *Client) Discoveries(ctx context.Context, logger string) (DiscoveriesResponse, error) {
+	var response DiscoveriesResponse
+	path := "/api/v1/loggers/" + url.PathEscape(logger) + "/discoveries"
+	err := c.get(ctx, path, &response)
+	return response, err
+}
+
 func (c *Client) get(ctx context.Context, path string, target any) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	return c.doJSON(ctx, http.MethodGet, path, nil, target)
+}
+
+func (c *Client) doJSON(ctx context.Context, method, path string, body, target any) error {
+	var requestBody *bytes.Reader
+	if body == nil {
+		requestBody = bytes.NewReader(nil)
+	} else {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("encode collector request: %w", err)
+		}
+		requestBody = bytes.NewReader(encoded)
+	}
+
+	request, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, requestBody)
 	if err != nil {
 		return err
 	}
 	request.Header.Set("Authorization", "Bearer "+c.key)
 	request.Header.Set("Accept", "application/json")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -139,6 +224,9 @@ func (c *Client) get(ctx context.Context, path string, target any) error {
 		return fmt.Errorf("collector returned %d: %s", response.StatusCode, apiError.Error)
 	}
 
+	if target == nil {
+		return nil
+	}
 	if err := json.NewDecoder(response.Body).Decode(target); err != nil {
 		return fmt.Errorf("decode collector response: %w", err)
 	}
