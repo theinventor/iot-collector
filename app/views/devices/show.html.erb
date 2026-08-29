@@ -1,60 +1,146 @@
 <% content_for :title, @device.display_name %>
 
 <main class="shell">
-  <header class="topbar">
+  <header class="topbar device-topbar">
     <div>
-      <%= link_to "Devices", root_path, class: "back-link" %>
+      <%= link_to "All devices", root_path(key: collector_key), class: "back-link" %>
+      <p class="device-identifier"><%= @device.identifier %></p>
       <h1><%= @device.display_name %></h1>
-      <p><%= @device.identifier %></p>
     </div>
-    <% if @device.last_seen_at.present? %>
-      <time datetime="<%= @device.last_seen_at.iso8601 %>"><%= time_ago_in_words(@device.last_seen_at) %> ago</time>
-    <% end %>
+    <div class="freshness">
+      <span class="status-dot <%= @device.last_seen_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
+      <span><%= @device.last_seen_at ? "Seen #{time_ago_in_words(@device.last_seen_at)} ago" : "Never seen" %></span>
+    </div>
   </header>
 
-  <section class="metric-grid metric-grid-wide">
-    <% @latest_measurements.each do |name, measurement| %>
+  <section class="report-toolbar" aria-label="Report controls">
+    <nav class="range-control" aria-label="Time range">
+      <% TelemetryRange::OPTIONS.each do |key, option| %>
+        <%= link_to option.fetch(:label),
+          device_path(identifier: @device.identifier, key: collector_key, range: key),
+          class: key == @range.key ? "active" : nil,
+          aria: { current: key == @range.key ? "page" : nil } %>
+      <% end %>
+    </nav>
+    <%= link_to "Export CSV",
+      device_path(identifier: @device.identifier, key: collector_key, range: @range.key, format: :csv),
+      class: "export-link" %>
+  </section>
+
+  <section class="latest-section" aria-labelledby="latest-heading">
+    <div class="section-heading">
       <div>
-        <dt><%= name.humanize %></dt>
-        <dd><%= measurement.display_value %></dd>
+        <p class="eyebrow">Current state</p>
+        <h2 id="latest-heading">Latest measurements</h2>
+      </div>
+      <span><%= pluralize(@report.reading_count, "reading") %> in <%= @range.label %></span>
+    </div>
+
+    <% if @latest_measurements.any? %>
+      <dl class="metric-grid metric-grid-wide">
+        <% @latest_measurements.each do |name, measurement| %>
+          <div>
+            <dt><%= name.humanize %></dt>
+            <dd><%= measurement.display_value %></dd>
+            <small><%= time_ago_in_words(measurement.recorded_at) %> ago</small>
+          </div>
+        <% end %>
+      </dl>
+    <% else %>
+      <p class="empty-line">No measurements yet.</p>
+    <% end %>
+  </section>
+
+  <section class="charts-section" aria-labelledby="history-heading">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">History</p>
+        <h2 id="history-heading"><%= @range.label %> trends</h2>
+      </div>
+      <span><%= l(@range.starts_at, format: :short) %> to now</span>
+    </div>
+
+    <% if @report.series.any? %>
+      <div class="chart-grid">
+        <% chart_colors = %w[#087e8b #d97706 #4f46e5 #b42318 #18794e #8a4baf] %>
+        <% @report.series.each_with_index do |series, index| %>
+          <% chart = telemetry_chart(series.points, starts_at: @range.starts_at, ends_at: @range.ends_at) %>
+          <article class="chart-card" style="--chart-color: <%= chart_colors[index % chart_colors.size] %>">
+            <header>
+              <div>
+                <p><%= series.name.humanize %></p>
+                <h3><%= metric_value(series.latest, series.unit) %></h3>
+              </div>
+              <dl class="chart-stats">
+                <div><dt>Average</dt><dd><%= metric_value(series.average, series.unit) %></dd></div>
+                <div><dt>Low</dt><dd><%= metric_value(series.minimum, series.unit) %></dd></div>
+                <div><dt>High</dt><dd><%= metric_value(series.maximum, series.unit) %></dd></div>
+                <div><dt>Change</dt><dd><%= metric_value(series.change, series.unit) %></dd></div>
+              </dl>
+            </header>
+
+            <div class="chart-frame">
+              <svg viewBox="0 0 800 220" role="img" aria-label="<%= series.name.humanize %> over <%= @range.label %>">
+                <line class="chart-gridline" x1="24" y1="20" x2="776" y2="20" />
+                <line class="chart-gridline" x1="24" y1="110" x2="776" y2="110" />
+                <line class="chart-gridline" x1="24" y1="200" x2="776" y2="200" />
+                <polygon class="chart-area" points="<%= chart.fetch(:area) %>" />
+                <polyline class="chart-line" points="<%= chart.fetch(:line) %>" />
+                <circle class="chart-point" cx="<%= chart.fetch(:latest_x) %>" cy="<%= chart.fetch(:latest_y) %>" r="4" />
+              </svg>
+              <div class="chart-axis"><span><%= l(@range.starts_at, format: :short) %></span><span>Now</span></div>
+            </div>
+          </article>
+        <% end %>
+      </div>
+    <% else %>
+      <div class="empty-chart">
+        <p>No numeric measurements in this range.</p>
       </div>
     <% end %>
   </section>
 
   <section class="data-section">
     <div class="section-header">
-      <h2>Recent readings</h2>
+      <div>
+        <p class="eyebrow">Raw samples</p>
+        <h2>Recent readings</h2>
+      </div>
       <span><%= pluralize(@readings.size, "shown") %></span>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Recorded</th>
-            <% @numeric_metric_names.each do |name| %>
-              <th><%= name.humanize %></th>
-            <% end %>
-            <th>Text metrics</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% @readings.each do |reading| %>
-            <% measurements = reading.measurements.index_by(&:name) %>
+    <% if @readings.any? %>
+      <div class="table-wrap">
+        <table>
+          <thead>
             <tr>
-              <td><%= l(reading.recorded_at, format: :short) %></td>
+              <th>Recorded</th>
               <% @numeric_metric_names.each do |name| %>
-                <td><%= measurements[name]&.display_value || "-" %></td>
+                <th><%= name.humanize %></th>
               <% end %>
-              <td>
-                <% reading.measurements.select { |measurement| measurement.numeric_value.nil? }.each do |measurement| %>
-                  <span class="pill"><%= measurement.name.humanize %>: <%= measurement.display_value %></span>
-                <% end %>
-              </td>
+              <th>Text metrics</th>
             </tr>
-          <% end %>
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            <% @readings.each do |reading| %>
+              <% measurements = reading.measurements.index_by(&:name) %>
+              <tr>
+                <td><%= l(reading.recorded_at, format: :short) %></td>
+                <% @numeric_metric_names.each do |name| %>
+                  <td><%= measurements[name]&.display_value || "-" %></td>
+                <% end %>
+                <td>
+                  <% reading.measurements.select { |measurement| measurement.numeric_value.nil? }.each do |measurement| %>
+                    <span class="pill"><%= measurement.name.humanize %>: <%= measurement.display_value %></span>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <p class="empty-table">No readings in this range.</p>
+    <% end %>
   </section>
 </main>

@@ -24,7 +24,14 @@ class Api::V1::ReadingsController < ActionController::API
   private
 
   def ingest_params
-    request.query_parameters.merge(request.request_parameters)
+    request.query_parameters.merge(request.request_parameters).tap do |parameters|
+      parameters["key"] ||= bearer_token || request.headers["X-IoT-Collector-Key"].presence
+    end
+  end
+
+  def bearer_token
+    scheme, token = request.authorization.to_s.split(" ", 2)
+    token if scheme&.casecmp("Bearer")&.zero?
   end
 
   def unauthorized

@@ -1,0 +1,17 @@
+<% content_for :title, "Open collector" %>
+
+<main class="access-shell">
+  <section class="access-panel">
+    <p class="eyebrow">Sunflower Vacations</p>
+    <h1>IoT Collector</h1>
+    <p>Enter the same collector key used by the telemetry device.</p>
+
+    <%= form_with url: root_path, method: :get, class: "key-form" do |form| %>
+      <%= form.label :key, "Collector key" %>
+      <div class="key-entry">
+        <%= form.password_field :key, required: true, autocomplete: "off", autofocus: true %>
+        <%= form.submit "View data" %>
+      </div>
+    <% end %>
+  </section>
+</main>

@@ -10,8 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_29_162044) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_205000) do
+  create_table "collectors", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "key_digest", null: false
+    t.string "name"
+    t.datetime "updated_at", null: false
+    t.index ["key_digest"], name: "index_collectors_on_key_digest", unique: true
+  end
+
   create_table "devices", force: :cascade do |t|
+    t.integer "collector_id", null: false
     t.datetime "created_at", null: false
     t.string "identifier", null: false
     t.string "last_ip"
@@ -19,7 +28,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_162044) do
     t.string "last_user_agent"
     t.string "name"
     t.datetime "updated_at", null: false
-    t.index ["identifier"], name: "index_devices_on_identifier", unique: true
+    t.index ["collector_id", "identifier"], name: "index_devices_on_collector_id_and_identifier", unique: true
+    t.index ["collector_id"], name: "index_devices_on_collector_id"
   end
 
   create_table "measurements", force: :cascade do |t|
@@ -49,6 +59,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_162044) do
     t.index ["device_id"], name: "index_readings_on_device_id"
   end
 
+  add_foreign_key "devices", "collectors"
   add_foreign_key "measurements", "devices"
   add_foreign_key "measurements", "readings"
   add_foreign_key "readings", "devices"
