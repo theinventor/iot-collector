@@ -1,7 +1,7 @@
 substitutions:
   name: atom-lite-victron-cloud
   friendly_name: ATOM Lite Victron Cloud
-  collector_base_url: https://iotcollector.sunflower-vacations.com
+  collector_base_url: https://iot.sunflower-vacations.com
   collector_key: replace-with-production-key
   collector_device: rv_charger
   victron_mac_address: 60:A4:23:91:8F:55

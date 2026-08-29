@@ -2,7 +2,7 @@ substitutions:
   name: atom-lite-cloud-test
   friendly_name: ATOM Lite Cloud Test
   collector_base_url: http://192.168.1.10:3000
-  collector_key: dev-secret
+  collector_key: 0123456789abcdef0123456789abcdef
   collector_device: atom_lite_test
 
 esphome:

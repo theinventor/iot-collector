@@ -1,8 +1,12 @@
 class Device < ApplicationRecord
+  belongs_to :collector
   has_many :readings, dependent: :destroy
   has_many :measurements, dependent: :destroy
 
-  validates :identifier, presence: true, uniqueness: true, length: { maximum: 80 }
+  validates :identifier,
+    presence: true,
+    uniqueness: { scope: :collector_id },
+    length: { maximum: 80 }
 
   def self.normalize_identifier(value)
     value.to_s.downcase.gsub(/[^a-z0-9]+/, "_").gsub(/\A_+|_+\z/, "").presence || "unknown"

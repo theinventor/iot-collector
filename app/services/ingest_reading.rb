@@ -1,6 +1,4 @@
 require "bigdecimal"
-require "digest"
-
 class IngestReading
   RESERVED_KEYS = %w[key controller action format device device_id name source ts timestamp recorded_at metrics].freeze
   NUMERIC_PATTERN = /\A-?\d+(\.\d+)?\z/
@@ -18,7 +16,7 @@ class IngestReading
   end
 
   def call
-    authenticate!
+    @collector = authenticate!
 
     device = find_or_create_device
     recorded_at = parse_time(@params["recorded_at"] || @params["timestamp"] || @params["ts"]) || @now
@@ -61,18 +59,12 @@ class IngestReading
   private
 
   def authenticate!
-    expected = Rails.application.config.x.iot_collector_ingest_key.to_s
-    submitted = @params["key"].to_s
-    raise Unauthorized if submitted.blank? || expected.blank?
-
-    expected_digest = Digest::SHA256.hexdigest(expected)
-    submitted_digest = Digest::SHA256.hexdigest(submitted)
-    raise Unauthorized unless ActiveSupport::SecurityUtils.secure_compare(expected_digest, submitted_digest)
+    Collector.find_or_create_for_ingest(@params["key"]) || raise(Unauthorized)
   end
 
   def find_or_create_device
     identifier = Device.normalize_identifier(@params["device"] || @params["device_id"] || @params["source"])
-    Device.find_or_create_by!(identifier: identifier)
+    @collector.devices.find_or_create_by!(identifier: identifier)
   end
 
   def extract_metrics

@@ -3,14 +3,18 @@
 <main class="shell">
   <header class="topbar">
     <div>
+      <p class="eyebrow">Sunflower Vacations</p>
       <h1>IoT Collector</h1>
       <p><%= @devices.size %> devices &middot; <%= number_with_delimiter(@total_readings) %> readings &middot; <%= number_with_delimiter(@total_measurements) %> measurements</p>
     </div>
-    <span class="status-dot <%= @latest_reading&.recorded_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
+    <div class="freshness">
+      <span class="status-dot <%= @latest_reading&.recorded_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
+      <span><%= @latest_reading ? "Updated #{time_ago_in_words(@latest_reading.recorded_at)} ago" : "Waiting for data" %></span>
+    </div>
   </header>
 
   <% if @devices.any? %>
-    <section class="device-grid">
+    <section class="device-grid" aria-label="Collector devices">
       <% @devices.each do |device| %>
         <% latest_reading = device.latest_reading %>
         <% latest_measurements = device.latest_measurements %>
@@ -18,12 +22,12 @@
         <article class="device-card">
           <div class="device-card-header">
             <div>
-              <h2><%= link_to device.display_name, device_path(device) %></h2>
-              <p><%= device.identifier %></p>
+              <p class="device-identifier"><%= device.identifier %></p>
+              <h2><%= link_to device.display_name, device_path(identifier: device.identifier, key: collector_key) %></h2>
             </div>
-            <% if device.last_seen_at.present? %>
-              <time datetime="<%= device.last_seen_at.iso8601 %>"><%= time_ago_in_words(device.last_seen_at) %> ago</time>
-            <% end %>
+            <span class="device-state <%= device.last_seen_at&.after?(15.minutes.ago) ? "online" : "idle" %>">
+              <%= device.last_seen_at&.after?(15.minutes.ago) ? "Online" : "Idle" %>
+            </span>
           </div>
 
           <% if latest_measurements.any? %>
@@ -51,7 +55,7 @@
   <% else %>
     <section class="empty-state">
       <h2>No readings yet</h2>
-      <p>The collector is waiting for its first device upload.</p>
+      <p>The collector is online and waiting for its first device upload.</p>
     </section>
   <% end %>
 </main>
