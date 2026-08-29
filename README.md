@@ -79,6 +79,8 @@ https://iotcollector.sunflower-vacations.com/api/v1/readings?key=YOUR_INGEST_KEY
 
 ## ESPHome
 
+The ATOM Lite example uses its built-in RGB LED for field diagnostics: red means offline or an upload error, yellow means connected but waiting for Victron data, and green means the collector accepted the latest Victron reading.
+
 Example firmware configs live in `examples/esphome/`.
 
 `atom-lite-cloud-test.yaml` sends a fixed sample reading to a development server so you can verify network path and API auth.
