@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -74,5 +75,76 @@ func TestAPIErrorIncludesStatusAndMessage(t *testing.T) {
 	_, err = client.Status(context.Background())
 	if err == nil || err.Error() != "collector returned 401: unauthorized" {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestConfigureSlotSendsValidatedFields(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPut || request.URL.Path != "/api/v1/loggers/atom_lite_logger/slots/2" {
+			t.Fatalf("request = %s %s", request.Method, request.URL.Path)
+		}
+		if request.Header.Get("Authorization") != "Bearer test-capability" {
+			t.Fatalf("authorization = %q", request.Header.Get("Authorization"))
+		}
+
+		var slot VictronSlot
+		if err := json.NewDecoder(request.Body).Decode(&slot); err != nil {
+			t.Fatal(err)
+		}
+		if slot.Name != "Hardwired Charger" || slot.MACAddress != "aa:bb:cc:dd:ee:ff" || slot.BindKey != "00112233445566778899aabbccddeeff" {
+			t.Fatalf("slot = %#v", slot)
+		}
+
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"ok":true,"logger":"atom_lite_logger","slot":{"position":2,"configured":true,"name":"Hardwired Charger"}}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "test-capability", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.ConfigureSlot(context.Background(), "atom_lite_logger", 2, VictronSlot{
+		Name:             "Hardwired Charger",
+		DeviceIdentifier: "hardwired_charger",
+		MACAddress:       "aa:bb:cc:dd:ee:ff",
+		BindKey:          "00112233445566778899aabbccddeeff",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Slot.Configured || result.Slot.Position != 2 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestLoggerConfigAndDiscoveriesEscapeLoggerName(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requests++
+		response.Header().Set("Content-Type", "application/json")
+		switch request.URL.Path {
+		case "/api/v1/loggers/ATOM Lite/config":
+			_, _ = response.Write([]byte(`{"ok":true,"logger":"atom_lite","slots":[]}`))
+		case "/api/v1/loggers/ATOM Lite/discoveries":
+			_, _ = response.Write([]byte(`{"ok":true,"logger":"atom_lite","discoveries":[]}`))
+		default:
+			t.Fatalf("path = %q", request.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "test-capability", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.LoggerConfig(context.Background(), "ATOM Lite"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Discoveries(context.Background(), "ATOM Lite"); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d", requests)
 	}
 }

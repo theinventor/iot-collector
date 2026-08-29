@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_29_205000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_222000) do
   create_table "collectors", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "key_digest", null: false
@@ -59,8 +59,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_205000) do
     t.index ["device_id"], name: "index_readings_on_device_id"
   end
 
+  create_table "victron_discoveries", force: :cascade do |t|
+    t.integer "collector_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "last_seen_at", null: false
+    t.string "logger_identifier", null: false
+    t.string "mac_address", null: false
+    t.integer "product_id", null: false
+    t.integer "rssi", null: false
+    t.datetime "updated_at", null: false
+    t.index ["collector_id", "logger_identifier", "mac_address"], name: "index_victron_discoveries_on_collector_logger_mac", unique: true
+    t.index ["collector_id"], name: "index_victron_discoveries_on_collector_id"
+  end
+
+  create_table "victron_slots", force: :cascade do |t|
+    t.string "bind_key"
+    t.integer "collector_id", null: false
+    t.datetime "created_at", null: false
+    t.string "device_identifier"
+    t.boolean "enabled", default: true, null: false
+    t.string "logger_identifier", null: false
+    t.string "mac_address"
+    t.string "name"
+    t.integer "position", null: false
+    t.datetime "updated_at", null: false
+    t.index ["collector_id", "logger_identifier", "position"], name: "index_victron_slots_on_collector_logger_position", unique: true
+    t.index ["collector_id"], name: "index_victron_slots_on_collector_id"
+  end
+
   add_foreign_key "devices", "collectors"
   add_foreign_key "measurements", "devices"
   add_foreign_key "measurements", "readings"
   add_foreign_key "readings", "devices"
+  add_foreign_key "victron_discoveries", "collectors"
+  add_foreign_key "victron_slots", "collectors"
 end

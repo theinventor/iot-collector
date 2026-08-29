@@ -63,6 +63,24 @@ The browser dashboard uses a query key:
 https://iot.sunflower-vacations.com/?key=YOUR_COLLECTOR_KEY
 ```
 
+## Remote Victron Management
+
+Loggers behind cellular routers or NAT can use the collector as a pull-based control plane. The logger reports unconfigured Victron Bluetooth advertisements and periodically retrieves its desired slot configuration. No inbound connection to the logger is required.
+
+These endpoints use the same collector capability key:
+
+```text
+GET    /api/v1/loggers/:identifier/config
+PUT    /api/v1/loggers/:identifier/slots/:position
+DELETE /api/v1/loggers/:identifier/slots/:position
+GET    /api/v1/loggers/:identifier/discoveries
+POST   /api/v1/loggers/:identifier/discoveries
+```
+
+Slot positions are `1`, `2`, or `3`. A slot contains a stable device identifier, display name, Bluetooth MAC address, and 32-character Victron advertisement key. An untouched slot does not override the logger's local configuration. Deleting a slot creates an explicit disabled configuration that the logger applies on its next poll.
+
+Bind keys are returned only by the authenticated configuration endpoint. They are not included in telemetry pages, discovery responses, or normal CLI output. Use HTTPS in production and treat the collector capability key as a secret.
+
 ## CLI
 
 The Go CLI uses only the standard library:
@@ -78,7 +96,19 @@ iotcollector devices
 iotcollector latest rv_charger
 iotcollector -range 7d -limit 50 readings rv_charger
 iotcollector -json devices
+
+iotcollector discoveries atom_lite_logger
+iotcollector config atom_lite_logger
+iotcollector configure \
+  --name "Motorhome Hardwired Charger" \
+  --device motorhome_hardwired_charger \
+  --mac aa:bb:cc:dd:ee:ff \
+  --bind-key 00112233445566778899aabbccddeeff \
+  atom_lite_logger 2
+iotcollector clear atom_lite_logger 2
 ```
+
+Flags for `configure` must appear before the logger identifier and slot number. Normal `config` output reports only whether a bind key is configured; `-json config` returns the complete authenticated firmware document, including bind keys.
 
 For a local checkout, run `go run ./cmd/iotcollector` in place of `iotcollector`.
 
@@ -128,7 +158,7 @@ https://iot.sunflower-vacations.com/api/v1/readings?key=YOUR_COLLECTOR_KEY
 
 ## ESPHome
 
-The ATOM Lite example uses its built-in RGB LED for field diagnostics: red means offline or an upload error, yellow means connected but waiting for Victron data, and green means the collector accepted the latest Victron reading.
+The ATOM Lite example uses its built-in RGB LED for field diagnostics: red means offline or an upload error, yellow means connected but waiting for Victron data, and green means the collector accepted the latest Victron reading. A field logger should upload Wi-Fi SSID, IP, and RSSI in its heartbeat so connectivity can be diagnosed through the collector.
 
 Example firmware configs live in `examples/esphome/`. `atom-lite-cloud-test.yaml` sends a fixed sample reading to a development server. `atom-lite-victron-cloud.yaml` decodes Victron BLE Instant Readout advertisements locally and uploads voltage, current, and state readings.
 
