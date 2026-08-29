@@ -4,8 +4,9 @@ substitutions:
   collector_base_url: https://iot.sunflower-vacations.com
   collector_key: replace-with-production-key
   collector_device: rv_charger
-  victron_mac_address: 60:A4:23:91:8F:55
-  victron_bindkey: 00000000000000000000000000000000
+  logger_device: atom_lite_logger
+  victron_mac_address: "60:A4:23:91:8F:55"
+  victron_bindkey: "00000000000000000000000000000000"
 
 esphome:
   name: ${name}
@@ -25,6 +26,12 @@ esp32:
 
 logger:
   level: INFO
+
+globals:
+  - id: victron_last_frame_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
 
 light:
   - platform: esp32_rmt_led_strip
@@ -86,7 +93,7 @@ wifi:
 http_request:
   timeout: 5s
   watchdog_timeout: 15s
-  verify_ssl: false
+  verify_ssl: true
 
 esp32_ble_tracker:
   scan_parameters:
@@ -97,6 +104,7 @@ victron_ble:
     mac_address: ${victron_mac_address}
     bindkey: ${victron_bindkey}
     on_ac_charger_message:
+      - lambda: id(victron_last_frame_ms) = millis();
       - logger.log:
           level: INFO
           format: "Decoded Victron AC charger advertisement"
@@ -148,7 +156,11 @@ interval:
           then:
             - if:
                 condition:
-                  lambda: return !isnan(id(battery_voltage).state) && !isnan(id(battery_current).state);
+                  lambda: |-
+                    return id(victron_last_frame_ms) != 0 &&
+                      (uint32_t) (millis() - id(victron_last_frame_ms)) < 90000 &&
+                      !isnan(id(battery_voltage).state) &&
+                      !isnan(id(battery_current).state);
                 then:
                   - logger.log:
                       level: INFO
@@ -157,11 +169,13 @@ interval:
                         - id(battery_voltage).state
                         - id(battery_current).state
                   - http_request.post:
-                      url: ${collector_base_url}/api/v1/readings?key=${collector_key}
+                      url: ${collector_base_url}/api/v1/readings
                       request_headers:
                         Content-Type: application/json
+                        Authorization: Bearer ${collector_key}
                       json: !lambda |-
                         root["device"] = "${collector_device}";
+                        root["name"] = "RV Charger";
                         JsonObject metrics = root["metrics"].to<JsonObject>();
 
                         JsonObject voltage = metrics["voltage"].to<JsonObject>();
@@ -187,6 +201,8 @@ interval:
                         if (!isnan(id(charger_error_code).state)) {
                           metrics["charger_error_code"] = id(charger_error_code).state;
                         }
+                        metrics["victron_frame_age_seconds"] =
+                          (uint32_t) (millis() - id(victron_last_frame_ms)) / 1000;
                       on_response:
                         then:
                           - lambda: |-
@@ -213,13 +229,15 @@ interval:
                   - script.execute: show_status_waiting
                   - logger.log:
                       level: INFO
-                      format: "No Victron frame yet; uploading collector heartbeat"
+                      format: "No recent Victron frame; uploading logger heartbeat"
                   - http_request.post:
-                      url: ${collector_base_url}/api/v1/readings?key=${collector_key}
+                      url: ${collector_base_url}/api/v1/readings
                       request_headers:
                         Content-Type: application/json
+                        Authorization: Bearer ${collector_key}
                       json: !lambda |-
-                        root["device"] = "${collector_device}";
+                        root["device"] = "${logger_device}";
+                        root["name"] = "ATOM Lite Logger";
                         JsonObject metrics = root["metrics"].to<JsonObject>();
                         metrics["logger_status"] = "waiting_for_victron";
                         metrics["uptime_seconds"] = millis() / 1000;
