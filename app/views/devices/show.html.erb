@@ -1,0 +1,60 @@
+<% content_for :title, @device.display_name %>
+
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <%= link_to "Devices", root_path, class: "back-link" %>
+      <h1><%= @device.display_name %></h1>
+      <p><%= @device.identifier %></p>
+    </div>
+    <% if @device.last_seen_at.present? %>
+      <time datetime="<%= @device.last_seen_at.iso8601 %>"><%= time_ago_in_words(@device.last_seen_at) %> ago</time>
+    <% end %>
+  </header>
+
+  <section class="metric-grid metric-grid-wide">
+    <% @latest_measurements.each do |name, measurement| %>
+      <div>
+        <dt><%= name.humanize %></dt>
+        <dd><%= measurement.display_value %></dd>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="data-section">
+    <div class="section-header">
+      <h2>Recent readings</h2>
+      <span><%= pluralize(@readings.size, "shown") %></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Recorded</th>
+            <% @numeric_metric_names.each do |name| %>
+              <th><%= name.humanize %></th>
+            <% end %>
+            <th>Text metrics</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @readings.each do |reading| %>
+            <% measurements = reading.measurements.index_by(&:name) %>
+            <tr>
+              <td><%= l(reading.recorded_at, format: :short) %></td>
+              <% @numeric_metric_names.each do |name| %>
+                <td><%= measurements[name]&.display_value || "-" %></td>
+              <% end %>
+              <td>
+                <% reading.measurements.select { |measurement| measurement.numeric_value.nil? }.each do |measurement| %>
+                  <span class="pill"><%= measurement.name.humanize %>: <%= measurement.display_value %></span>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>

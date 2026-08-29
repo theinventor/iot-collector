@@ -1,0 +1,57 @@
+<% content_for :title, "IoT Collector" %>
+
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <h1>IoT Collector</h1>
+      <p><%= @devices.size %> devices &middot; <%= number_with_delimiter(@total_readings) %> readings &middot; <%= number_with_delimiter(@total_measurements) %> measurements</p>
+    </div>
+    <span class="status-dot <%= @latest_reading&.recorded_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
+  </header>
+
+  <% if @devices.any? %>
+    <section class="device-grid">
+      <% @devices.each do |device| %>
+        <% latest_reading = device.latest_reading %>
+        <% latest_measurements = device.latest_measurements %>
+
+        <article class="device-card">
+          <div class="device-card-header">
+            <div>
+              <h2><%= link_to device.display_name, device_path(device) %></h2>
+              <p><%= device.identifier %></p>
+            </div>
+            <% if device.last_seen_at.present? %>
+              <time datetime="<%= device.last_seen_at.iso8601 %>"><%= time_ago_in_words(device.last_seen_at) %> ago</time>
+            <% end %>
+          </div>
+
+          <% if latest_measurements.any? %>
+            <dl class="metric-grid">
+              <% latest_measurements.first(8).each do |name, measurement| %>
+                <div>
+                  <dt><%= name.humanize %></dt>
+                  <dd><%= measurement.display_value %></dd>
+                </div>
+              <% end %>
+            </dl>
+          <% else %>
+            <p class="empty-line">No measurements yet.</p>
+          <% end %>
+
+          <footer>
+            <span><%= pluralize(device.readings.count, "reading") %></span>
+            <% if latest_reading %>
+              <span>Last sample <%= l(latest_reading.recorded_at, format: :short) %></span>
+            <% end %>
+          </footer>
+        </article>
+      <% end %>
+    </section>
+  <% else %>
+    <section class="empty-state">
+      <h2>No readings yet</h2>
+      <p>The collector is waiting for its first device upload.</p>
+    </section>
+  <% end %>
+</main>
