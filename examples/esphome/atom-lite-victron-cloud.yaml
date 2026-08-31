@@ -83,11 +83,11 @@ wifi:
   on_disconnect:
     - script.execute: show_status_offline
   networks:
-    - ssid: !secret wifi_ssid_rv
-      password: !secret wifi_password_rv
-      priority: 20
     - ssid: !secret wifi_ssid_ranch
       password: !secret wifi_password_ranch
+      priority: 20
+    - ssid: !secret wifi_ssid_rv
+      password: !secret wifi_password_rv
       priority: 10
 
 http_request:

@@ -32,6 +32,8 @@
 
 # Ignore ESPHome's local validation and build cache.
 /examples/esphome/.esphome/
+/firmware/.esphome/
+/firmware/secrets.yaml
 
 # Ignore key files for decrypting credentials and more.
 /config/*.key

@@ -162,7 +162,9 @@ https://iot.sunflower-vacations.com/api/v1/readings?key=YOUR_COLLECTOR_KEY
 
 The ATOM Lite example uses its built-in RGB LED for field diagnostics: red means offline or an upload error, yellow means connected but waiting for Victron data, and green means the collector accepted the latest Victron reading. A field logger should upload Wi-Fi SSID, IP, and RSSI in its heartbeat so connectivity can be diagnosed through the collector.
 
-Example firmware configs live in `examples/esphome/`. `atom-lite-cloud-test.yaml` sends a fixed sample reading to a development server. `atom-lite-victron-cloud.yaml` decodes Victron BLE Instant Readout advertisements locally and uploads voltage, current, and state readings.
+The production ATOM Lite firmware and flashing instructions live in [`firmware/`](firmware/README.md). It supports cloud-managed Victron slots, discovery reporting, local authenticated diagnostics, Ranch-primary Wi-Fi with RV fallback, and direct telemetry uploads without Home Assistant.
+
+Smaller reference configurations remain in `examples/esphome/`. `atom-lite-cloud-test.yaml` sends a fixed sample reading to a development server, and `atom-lite-victron-cloud.yaml` demonstrates a single statically configured Victron decoder.
 
 Do not commit real Wi-Fi passwords, collector keys, or Victron bind keys.
 

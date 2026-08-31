@@ -1,0 +1,787 @@
+substitutions:
+  name: victron-ble-proxy
+  friendly_name: Victron Cloud Logger
+  collector_base_url: https://iot.sunflower-vacations.com
+  collector_key: !secret collector_production_key
+  logger_device: atom_lite_logger
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: true
+  min_version: 2026.8.1
+  includes:
+    - victron_runtime_config.h
+  on_boot:
+    - priority: 600
+      then:
+        - script.execute: show_status_offline
+    - priority: -100
+      then:
+        - delay: 2s
+        - script.execute: apply_slot_1
+        - script.execute: apply_slot_2
+        - script.execute: apply_slot_3
+        - delay: 13s
+        - script.execute: fetch_cloud_config
+
+external_components:
+  - source: github://Fabian-Schmidt/esphome-victron_ble
+
+esp32:
+  board: m5stack-atom
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+globals:
+  - id: upload_cursor
+    type: uint8_t
+    restore_value: false
+    initial_value: "0"
+  - id: discovered_mac
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: discovered_product_id
+    type: uint16_t
+    restore_value: false
+    initial_value: "0"
+  - id: discovered_rssi
+    type: int
+    restore_value: false
+    initial_value: "-127"
+  - id: discovery_pending
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    internal: true
+    pin: GPIO27
+    num_leds: 1
+    chipset: SK6812
+    channel_colors: GRB
+    restore_mode: ALWAYS_OFF
+
+script:
+  - id: handle_upload_failure
+    then:
+      - script.execute: show_status_offline
+      - lambda: |-
+          if (victron_runtime::record_upload_failure()) {
+            ESP_LOGW("wifi", "Three consecutive cloud failures; restarting Wi-Fi connection");
+            id(wifi_component).retry_connect();
+          }
+
+  - id: show_status_offline
+    then:
+      - light.turn_on:
+          id: status_led
+          red: 100%
+          green: 0%
+          blue: 0%
+          brightness: 40%
+          transition_length: 0s
+
+  - id: show_status_waiting
+    then:
+      - light.turn_on:
+          id: status_led
+          red: 100%
+          green: 65%
+          blue: 0%
+          brightness: 40%
+          transition_length: 0s
+
+  - id: show_status_success
+    then:
+      - light.turn_on:
+          id: status_led
+          red: 0%
+          green: 100%
+          blue: 0%
+          brightness: 40%
+          transition_length: 0s
+
+  - id: apply_slot_1
+    then:
+      - lambda: |-
+          const char *result = victron_runtime::configure(
+            id(victron_slot_1), id(slot_1_mac).state, id(slot_1_key).state);
+          victron_runtime::slot(0).reset();
+          id(slot_1_status).publish_state(result);
+          ESP_LOGI("config", "Slot 1 (%s): %s", id(slot_1_name).state.c_str(), result);
+
+  - id: apply_slot_2
+    then:
+      - lambda: |-
+          const char *result = victron_runtime::configure(
+            id(victron_slot_2), id(slot_2_mac).state, id(slot_2_key).state);
+          victron_runtime::slot(1).reset();
+          id(slot_2_status).publish_state(result);
+          ESP_LOGI("config", "Slot 2 (%s): %s", id(slot_2_name).state.c_str(), result);
+
+  - id: apply_slot_3
+    then:
+      - lambda: |-
+          const char *result = victron_runtime::configure(
+            id(victron_slot_3), id(slot_3_mac).state, id(slot_3_key).state);
+          victron_runtime::slot(2).reset();
+          id(slot_3_status).publish_state(result);
+          ESP_LOGI("config", "Slot 3 (%s): %s", id(slot_3_name).state.c_str(), result);
+
+  - id: fetch_cloud_config
+    mode: single
+    then:
+      - http_request.get:
+          url: ${collector_base_url}/api/v1/loggers/${logger_device}/config
+          request_headers:
+            Authorization: Bearer ${collector_key}
+          capture_response: true
+          max_response_buffer_size: 4096
+          on_response:
+            then:
+              - if:
+                  condition:
+                    lambda: return response->status_code >= 200 && response->status_code < 300;
+                  then:
+                    - lambda: |-
+                        std::array<victron_runtime::CloudSlot, 3> slots{};
+                        if (!victron_runtime::parse_cloud_config(body, slots)) {
+                          ESP_LOGW("config", "Cloud configuration response was invalid");
+                          return;
+                        }
+
+                        auto set_text = [](auto *entity, const std::string &value) {
+                          if (entity->state == value) return;
+                          auto call = entity->make_call();
+                          call.set_value(value);
+                          call.perform();
+                        };
+
+                        if (slots[0].managed) {
+                          if (slots[0].configured) {
+                            set_text(id(slot_1_device), slots[0].device_identifier);
+                            set_text(id(slot_1_name), slots[0].name);
+                            set_text(id(slot_1_mac), slots[0].mac_address);
+                            set_text(id(slot_1_key), slots[0].bind_key);
+                          } else {
+                            set_text(id(slot_1_mac), "");
+                            set_text(id(slot_1_key), "");
+                          }
+                        }
+                        if (slots[1].managed) {
+                          if (slots[1].configured) {
+                            set_text(id(slot_2_device), slots[1].device_identifier);
+                            set_text(id(slot_2_name), slots[1].name);
+                            set_text(id(slot_2_mac), slots[1].mac_address);
+                            set_text(id(slot_2_key), slots[1].bind_key);
+                          } else {
+                            set_text(id(slot_2_mac), "");
+                            set_text(id(slot_2_key), "");
+                          }
+                        }
+                        if (slots[2].managed) {
+                          if (slots[2].configured) {
+                            set_text(id(slot_3_device), slots[2].device_identifier);
+                            set_text(id(slot_3_name), slots[2].name);
+                            set_text(id(slot_3_mac), slots[2].mac_address);
+                            set_text(id(slot_3_key), slots[2].bind_key);
+                          } else {
+                            set_text(id(slot_3_mac), "");
+                            set_text(id(slot_3_key), "");
+                          }
+                        }
+                        victron_runtime::record_upload_success();
+                        if (!victron_runtime::slot(0).is_recent(millis()) &&
+                            !victron_runtime::slot(1).is_recent(millis()) &&
+                            !victron_runtime::slot(2).is_recent(millis())) {
+                          id(show_status_waiting).execute();
+                        }
+                        ESP_LOGI("config", "Cloud configuration applied");
+                  else:
+                    - script.execute: handle_upload_failure
+          on_error:
+            then:
+              - script.execute: handle_upload_failure
+
+  - id: upload_discovery
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: return id(discovery_pending) && !id(discovered_mac).empty();
+          then:
+            - http_request.post:
+                url: ${collector_base_url}/api/v1/loggers/${logger_device}/discoveries
+                request_headers:
+                  Content-Type: application/json
+                  Authorization: Bearer ${collector_key}
+                json: !lambda |-
+                  root["mac_address"] = id(discovered_mac);
+                  root["product_id"] = id(discovered_product_id);
+                  root["rssi"] = id(discovered_rssi);
+                on_response:
+                  then:
+                    - if:
+                        condition:
+                          lambda: return response->status_code >= 200 && response->status_code < 300;
+                        then:
+                          - lambda: |-
+                              id(discovery_pending) = false;
+                              victron_runtime::record_upload_success();
+                        else:
+                          - script.execute: handle_upload_failure
+                on_error:
+                  then:
+                    - script.execute: handle_upload_failure
+
+  - id: upload_slot_1
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: return victron_runtime::slot(0).needs_upload(millis());
+          then:
+            - http_request.post:
+                url: ${collector_base_url}/api/v1/readings
+                request_headers:
+                  Content-Type: application/json
+                  Authorization: Bearer ${collector_key}
+                json: !lambda |-
+                  root["device"] = id(slot_1_device).state;
+                  root["name"] = id(slot_1_name).state;
+                  victron_runtime::slot(0).write_metrics(root["metrics"].to<JsonObject>(), millis());
+                on_response:
+                  then:
+                    - if:
+                        condition:
+                          lambda: return response->status_code >= 200 && response->status_code < 300;
+                        then:
+                          - lambda: |-
+                              victron_runtime::slot(0).mark_uploaded();
+                              victron_runtime::record_upload_success();
+                              ESP_LOGI("collector", "%s accepted with HTTP %d",
+                                id(slot_1_name).state.c_str(), response->status_code);
+                          - script.execute: show_status_success
+                        else:
+                          - lambda: |-
+                              ESP_LOGW("collector", "%s returned HTTP %d",
+                                id(slot_1_name).state.c_str(), response->status_code);
+                          - script.execute: handle_upload_failure
+                on_error:
+                  then:
+                    - script.execute: handle_upload_failure
+                    - logger.log:
+                        level: WARN
+                        tag: collector
+                        format: "Slot 1 upload failed"
+
+  - id: upload_slot_2
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: return victron_runtime::slot(1).needs_upload(millis());
+          then:
+            - http_request.post:
+                url: ${collector_base_url}/api/v1/readings
+                request_headers:
+                  Content-Type: application/json
+                  Authorization: Bearer ${collector_key}
+                json: !lambda |-
+                  root["device"] = id(slot_2_device).state;
+                  root["name"] = id(slot_2_name).state;
+                  victron_runtime::slot(1).write_metrics(root["metrics"].to<JsonObject>(), millis());
+                on_response:
+                  then:
+                    - if:
+                        condition:
+                          lambda: return response->status_code >= 200 && response->status_code < 300;
+                        then:
+                          - lambda: |-
+                              victron_runtime::slot(1).mark_uploaded();
+                              victron_runtime::record_upload_success();
+                              ESP_LOGI("collector", "%s accepted with HTTP %d",
+                                id(slot_2_name).state.c_str(), response->status_code);
+                          - script.execute: show_status_success
+                        else:
+                          - lambda: |-
+                              ESP_LOGW("collector", "%s returned HTTP %d",
+                                id(slot_2_name).state.c_str(), response->status_code);
+                          - script.execute: handle_upload_failure
+                on_error:
+                  then:
+                    - script.execute: handle_upload_failure
+                    - logger.log:
+                        level: WARN
+                        tag: collector
+                        format: "Slot 2 upload failed"
+
+  - id: upload_slot_3
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: return victron_runtime::slot(2).needs_upload(millis());
+          then:
+            - http_request.post:
+                url: ${collector_base_url}/api/v1/readings
+                request_headers:
+                  Content-Type: application/json
+                  Authorization: Bearer ${collector_key}
+                json: !lambda |-
+                  root["device"] = id(slot_3_device).state;
+                  root["name"] = id(slot_3_name).state;
+                  victron_runtime::slot(2).write_metrics(root["metrics"].to<JsonObject>(), millis());
+                on_response:
+                  then:
+                    - if:
+                        condition:
+                          lambda: return response->status_code >= 200 && response->status_code < 300;
+                        then:
+                          - lambda: |-
+                              victron_runtime::slot(2).mark_uploaded();
+                              victron_runtime::record_upload_success();
+                              ESP_LOGI("collector", "%s accepted with HTTP %d",
+                                id(slot_3_name).state.c_str(), response->status_code);
+                          - script.execute: show_status_success
+                        else:
+                          - lambda: |-
+                              ESP_LOGW("collector", "%s returned HTTP %d",
+                                id(slot_3_name).state.c_str(), response->status_code);
+                          - script.execute: handle_upload_failure
+                on_error:
+                  then:
+                    - script.execute: handle_upload_failure
+                    - logger.log:
+                        level: WARN
+                        tag: collector
+                        format: "Slot 3 upload failed"
+
+  - id: upload_heartbeat
+    mode: single
+    then:
+      - http_request.post:
+          url: ${collector_base_url}/api/v1/readings
+          request_headers:
+            Content-Type: application/json
+            Authorization: Bearer ${collector_key}
+          json: !lambda |-
+            root["device"] = "${logger_device}";
+            root["name"] = "ATOM Lite Logger";
+            JsonObject metrics = root["metrics"].to<JsonObject>();
+            metrics["logger_status"] = "waiting_for_victron";
+            metrics["uptime_seconds"] = millis() / 1000;
+            metrics["wifi_ssid"] = id(wifi_ssid).state;
+            metrics["wifi_ip"] = id(wifi_ip_address).state;
+            metrics["slot_1_status"] = id(slot_1_status).state;
+            metrics["slot_2_status"] = id(slot_2_status).state;
+            metrics["slot_3_status"] = id(slot_3_status).state;
+            if (!id(nearby_victron).state.empty()) {
+              metrics["nearby_victron"] = id(nearby_victron).state;
+            }
+            if (!std::isnan(id(wifi_rssi).state)) {
+              JsonObject rssi = metrics["wifi_rssi"].to<JsonObject>();
+              rssi["value"] = id(wifi_rssi).state;
+              rssi["unit"] = "dBm";
+            }
+          on_response:
+            then:
+              - if:
+                  condition:
+                    lambda: return response->status_code >= 200 && response->status_code < 300;
+                  then:
+                    - lambda: victron_runtime::record_upload_success();
+                    - script.execute: show_status_waiting
+                  else:
+                    - script.execute: handle_upload_failure
+          on_error:
+            then:
+              - script.execute: handle_upload_failure
+
+ota:
+  - platform: esphome
+
+wifi:
+  id: wifi_component
+  power_save_mode: none
+  output_power: 20.5dB
+  reboot_timeout: 5min
+  on_connect:
+    - delay: 1s
+    - lambda: |-
+        victron_runtime::use_public_dns();
+        ESP_LOGI("wifi", "Using public DNS fallback");
+    - script.execute: show_status_waiting
+  on_disconnect:
+    - script.execute: show_status_offline
+  networks:
+    - ssid: !secret wifi_ssid_ranch
+      password: !secret wifi_password_ranch
+      priority: 20
+    - ssid: !secret wifi_ssid_rv
+      password: !secret wifi_password_rv
+      priority: 10
+  ap:
+    ssid: ${friendly_name} Setup
+
+captive_portal:
+
+improv_serial:
+
+web_server:
+  port: 80
+  version: 3
+  local: true
+  auth:
+    type: digest
+    username: admin
+    password: ${collector_key}
+  include_internal: false
+  log: true
+
+http_request:
+  timeout: 5s
+  watchdog_timeout: 15s
+  verify_ssl: true
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: false
+    interval: 320ms
+    window: 100ms
+  on_ble_advertise:
+    then:
+      - lambda: |-
+          for (const auto &manufacturer_data : x.get_manufacturer_datas()) {
+            if (manufacturer_data.uuid !=
+                esp32_ble_tracker::ESPBTUUID::from_uint16(0x02E1)) {
+              continue;
+            }
+
+            const uint64_t address = x.address_uint64();
+            uint16_t product_id = 0;
+            if (manufacturer_data.data.size() >= 4) {
+              product_id = manufacturer_data.data[2] |
+                (static_cast<uint16_t>(manufacturer_data.data[3]) << 8);
+            }
+
+            char address_buffer[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+            const char *address_string = x.address_str_to(address_buffer);
+            const bool slot_1_match =
+              victron_runtime::configured_address(address, id(slot_1_mac).state);
+            const bool slot_2_match =
+              victron_runtime::configured_address(address, id(slot_2_mac).state);
+            const bool slot_3_match =
+              victron_runtime::configured_address(address, id(slot_3_mac).state);
+
+            if (slot_1_match || slot_2_match || slot_3_match) {
+              static uint32_t last_configured_publish_ms[3] = {0, 0, 0};
+              auto report_waiting = [&](size_t index, auto *status, const std::string &name) {
+                if (victron_runtime::slot(index).is_recent(millis()) ||
+                    millis() - last_configured_publish_ms[index] < 10000) {
+                  return;
+                }
+
+                const std::string summary = str_snprintf(
+                  "Advertisement seen (%d dBm); waiting to decrypt", 64, x.get_rssi());
+                status->publish_state(summary);
+                ESP_LOGI("victron_scan", "%s: %s | product 0x%04X | RSSI %d dBm",
+                  name.c_str(), address_string, product_id, x.get_rssi());
+                last_configured_publish_ms[index] = millis();
+              };
+
+              if (slot_1_match) report_waiting(0, id(slot_1_status), id(slot_1_name).state);
+              if (slot_2_match) report_waiting(1, id(slot_2_status), id(slot_2_name).state);
+              if (slot_3_match) report_waiting(2, id(slot_3_status), id(slot_3_name).state);
+              continue;
+            }
+
+            static uint64_t last_address = 0;
+            static uint32_t last_publish_ms = 0;
+            if (address != last_address || millis() - last_publish_ms >= 10000) {
+              const std::string summary = str_snprintf(
+                "%s | product 0x%04X | RSSI %d dBm", 64,
+                address_string, product_id, x.get_rssi());
+              id(nearby_victron).publish_state(summary);
+              id(discovered_mac) = address_string;
+              id(discovered_product_id) = product_id;
+              id(discovered_rssi) = x.get_rssi();
+              id(discovery_pending) = true;
+              ESP_LOGI("victron_scan", "Nearby unconfigured Victron: %s", summary.c_str());
+              last_address = address;
+              last_publish_ms = millis();
+            }
+          }
+
+victron_ble:
+  - id: victron_slot_1
+    mac_address: !secret victron_charger_mac
+    bindkey: !secret victron_charger_bindkey
+    on_message:
+      - lambda: |-
+          victron_runtime::slot(0).update(message, millis());
+          id(slot_1_status).publish_state(
+            std::string("Receiving ") + victron_runtime::record_type_name(message->record_type));
+
+  - id: victron_slot_2
+    mac_address: "00:00:00:00:00:02"
+    bindkey: "00000000000000000000000000000000"
+    on_message:
+      - lambda: |-
+          victron_runtime::slot(1).update(message, millis());
+          id(slot_2_status).publish_state(
+            std::string("Receiving ") + victron_runtime::record_type_name(message->record_type));
+
+  - id: victron_slot_3
+    mac_address: "00:00:00:00:00:03"
+    bindkey: "00000000000000000000000000000000"
+    on_message:
+      - lambda: |-
+          victron_runtime::slot(2).update(message, millis());
+          id(slot_3_status).publish_state(
+            std::string("Receiving ") + victron_runtime::record_type_name(message->record_type));
+
+text:
+  - platform: template
+    name: Slot 1 Device ID
+    id: slot_1_device
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: utility_lithium_charger
+    min_length: 1
+    max_length: 80
+
+  - platform: template
+    name: Slot 1 Name
+    id: slot_1_name
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: Utility Lithium Charger
+    min_length: 1
+    max_length: 64
+
+  - platform: template
+    name: Slot 1 MAC
+    id: slot_1_mac
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: !secret victron_charger_mac
+    max_length: 17
+    pattern: '(^$)|(^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$)'
+    on_value:
+      then:
+        - script.execute: apply_slot_1
+
+  - platform: template
+    name: Slot 1 Bind Key
+    id: slot_1_key
+    mode: password
+    optimistic: true
+    restore_value: true
+    initial_value: !secret victron_charger_bindkey
+    max_length: 32
+    pattern: '(^$)|(^[0-9A-Fa-f]{32}$)'
+    on_value:
+      then:
+        - script.execute: apply_slot_1
+
+  - platform: template
+    name: Slot 2 Device ID
+    id: slot_2_device
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: motorhome_hardwired_charger
+    min_length: 1
+    max_length: 80
+
+  - platform: template
+    name: Slot 2 Name
+    id: slot_2_name
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: Motorhome Hardwired Charger
+    min_length: 1
+    max_length: 64
+
+  - platform: template
+    name: Slot 2 MAC
+    id: slot_2_mac
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    max_length: 17
+    pattern: '(^$)|(^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$)'
+    on_value:
+      then:
+        - script.execute: apply_slot_2
+
+  - platform: template
+    name: Slot 2 Bind Key
+    id: slot_2_key
+    mode: password
+    optimistic: true
+    restore_value: true
+    initial_value: !secret victron_0341_bindkey
+    max_length: 32
+    pattern: '(^$)|(^[0-9A-Fa-f]{32}$)'
+    on_value:
+      then:
+        - script.execute: apply_slot_2
+
+  - platform: template
+    name: Slot 3 Device ID
+    id: slot_3_device
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: motorhome_shunt
+    min_length: 1
+    max_length: 80
+
+  - platform: template
+    name: Slot 3 Name
+    id: slot_3_name
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: Motorhome Shunt
+    min_length: 1
+    max_length: 64
+
+  - platform: template
+    name: Slot 3 MAC
+    id: slot_3_mac
+    mode: text
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    max_length: 17
+    pattern: '(^$)|(^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$)'
+    on_value:
+      then:
+        - script.execute: apply_slot_3
+
+  - platform: template
+    name: Slot 3 Bind Key
+    id: slot_3_key
+    mode: password
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    max_length: 32
+    pattern: '(^$)|(^[0-9A-Fa-f]{32}$)'
+    on_value:
+      then:
+        - script.execute: apply_slot_3
+
+text_sensor:
+  - platform: wifi_info
+    ssid:
+      name: WiFi SSID
+      id: wifi_ssid
+    ip_address:
+      name: IP Address
+      id: wifi_ip_address
+      on_value:
+        then:
+          - logger.log:
+              level: INFO
+              tag: wifi
+              format: "Configuration page: http://%s"
+              args:
+                - x.c_str()
+
+  - platform: template
+    name: Nearby Unconfigured Victron
+    id: nearby_victron
+
+  - platform: template
+    name: Slot 1 Status
+    id: slot_1_status
+
+  - platform: template
+    name: Slot 2 Status
+    id: slot_2_status
+
+  - platform: template
+    name: Slot 3 Status
+    id: slot_3_status
+
+sensor:
+  - platform: wifi_signal
+    name: WiFi RSSI
+    id: wifi_rssi
+    update_interval: 30s
+    entity_category: diagnostic
+
+interval:
+  - interval: 10s
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - lambda: id(upload_cursor) = (id(upload_cursor) + 1) % 3;
+            - if:
+                condition:
+                  lambda: return id(upload_cursor) == 0;
+                then:
+                  - script.execute: upload_slot_1
+            - if:
+                condition:
+                  lambda: return id(upload_cursor) == 1;
+                then:
+                  - script.execute: upload_slot_2
+            - if:
+                condition:
+                  lambda: return id(upload_cursor) == 2;
+                then:
+                  - script.execute: upload_slot_3
+          else:
+            - script.execute: show_status_offline
+
+  - interval: 60s
+    then:
+      - if:
+          condition:
+            and:
+              - wifi.connected:
+              - lambda: |-
+                  return !victron_runtime::slot(0).is_recent(millis()) &&
+                    !victron_runtime::slot(1).is_recent(millis()) &&
+                    !victron_runtime::slot(2).is_recent(millis());
+          then:
+            - script.execute: upload_heartbeat
+
+  - interval: 30s
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - script.execute: upload_discovery
+
+  - interval: 2min
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - script.execute: fetch_cloud_config
+
+button:
+  - platform: restart
+    name: Restart
