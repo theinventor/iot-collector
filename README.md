@@ -57,11 +57,13 @@ GET /api/v1/devices/:identifier/readings?range=24h&limit=100
 
 Valid ranges are `1h`, `6h`, `24h`, `7d`, and `30d`. The readings API returns at most 500 samples per request.
 
-The browser dashboard uses a query key:
+Open the browser dashboard and enter the same collector key used for uploads:
 
 ```text
-https://iot.sunflower-vacations.com/?key=YOUR_COLLECTOR_KEY
+https://iot.sunflower-vacations.com/
 ```
+
+The dashboard remembers the key in an encrypted, HTTP-only cookie and renews it on every authenticated visit. Access remains available across browser restarts until **Log out** is clicked or the browser's site data is cleared. Existing `?key=...` links remain supported, but redirect immediately to a URL without the key.
 
 ## Remote Victron Management
 

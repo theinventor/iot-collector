@@ -6,10 +6,14 @@
     <h1>IoT Collector</h1>
     <p>Enter the same collector key used by the telemetry device.</p>
 
-    <%= form_with url: root_path, method: :get, class: "key-form" do |form| %>
+    <% if @invalid_key %>
+      <p class="form-error" role="alert">That collector key was not recognized.</p>
+    <% end %>
+
+    <%= form_with url: access_path, method: :post, class: "key-form" do |form| %>
       <%= form.label :key, "Collector key" %>
       <div class="key-entry">
-        <%= form.password_field :key, required: true, autocomplete: "off", autofocus: true %>
+        <%= form.password_field :key, required: true, autocomplete: "current-password", autofocus: true %>
         <%= form.submit "View data" %>
       </div>
     <% end %>

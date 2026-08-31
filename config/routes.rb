@@ -2,6 +2,7 @@ Rails.application.routes.draw do
   root "dashboard#index"
 
   get "up" => "rails/health#show", as: :rails_health_check
+  resource :access, only: [ :create, :destroy ], controller: "collector_access"
   get "devices/:identifier" => "devices#show", as: :device
 
   namespace :api do

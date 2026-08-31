@@ -7,9 +7,12 @@
       <h1>IoT Collector</h1>
       <p><%= @devices.size %> devices &middot; <%= number_with_delimiter(@total_readings) %> readings &middot; <%= number_with_delimiter(@total_measurements) %> measurements</p>
     </div>
-    <div class="freshness">
-      <span class="status-dot <%= @latest_reading&.recorded_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
-      <span><%= @latest_reading ? "Updated #{time_ago_in_words(@latest_reading.recorded_at)} ago" : "Waiting for data" %></span>
+    <div class="topbar-actions">
+      <div class="freshness">
+        <span class="status-dot <%= @latest_reading&.recorded_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
+        <span><%= @latest_reading ? "Updated #{time_ago_in_words(@latest_reading.recorded_at)} ago" : "Waiting for data" %></span>
+      </div>
+      <%= button_to "Log out", access_path, method: :delete, class: "logout-button", form_class: "logout-form" %>
     </div>
   </header>
 
@@ -23,7 +26,7 @@
           <div class="device-card-header">
             <div>
               <p class="device-identifier"><%= device.identifier %></p>
-              <h2><%= link_to device.display_name, device_path(identifier: device.identifier, key: collector_key) %></h2>
+              <h2><%= link_to device.display_name, device_path(identifier: device.identifier) %></h2>
             </div>
             <span class="device-state <%= device.last_seen_at&.after?(15.minutes.ago) ? "online" : "idle" %>">
               <%= device.last_seen_at&.after?(15.minutes.ago) ? "Online" : "Idle" %>
