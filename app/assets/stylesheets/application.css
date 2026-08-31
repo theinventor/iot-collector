@@ -114,6 +114,34 @@ small {
   white-space: nowrap;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logout-form {
+  margin: 0;
+}
+
+.logout-button {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
 .status-dot {
   width: 11px;
   height: 11px;
@@ -487,6 +515,13 @@ tr:last-child td {
   color: var(--muted);
 }
 
+.access-panel .form-error {
+  margin-top: 16px;
+  color: var(--danger);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .key-form {
   margin-top: 24px;
 }
@@ -558,6 +593,11 @@ tr:last-child td {
     white-space: normal;
   }
 
+  .topbar-actions {
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
   .report-toolbar {
     align-items: stretch;
   }
@@ -567,8 +607,12 @@ tr:last-child td {
   }
 
   .range-control a {
-    min-width: 70px;
-    flex: 1 0 auto;
+    box-sizing: border-box;
+    min-width: 0;
+    padding-right: 4px;
+    padding-left: 4px;
+    flex: 1 1 20%;
+    font-size: 0.76rem;
   }
 
   .export-link {

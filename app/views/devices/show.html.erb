@@ -3,13 +3,16 @@
 <main class="shell">
   <header class="topbar device-topbar">
     <div>
-      <%= link_to "All devices", root_path(key: collector_key), class: "back-link" %>
+      <%= link_to "All devices", root_path, class: "back-link" %>
       <p class="device-identifier"><%= @device.identifier %></p>
       <h1><%= @device.display_name %></h1>
     </div>
-    <div class="freshness">
-      <span class="status-dot <%= @device.last_seen_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
-      <span><%= @device.last_seen_at ? "Seen #{time_ago_in_words(@device.last_seen_at)} ago" : "Never seen" %></span>
+    <div class="topbar-actions">
+      <div class="freshness">
+        <span class="status-dot <%= @device.last_seen_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
+        <span><%= @device.last_seen_at ? "Seen #{time_ago_in_words(@device.last_seen_at)} ago" : "Never seen" %></span>
+      </div>
+      <%= button_to "Log out", access_path, method: :delete, class: "logout-button", form_class: "logout-form" %>
     </div>
   </header>
 
@@ -17,13 +20,13 @@
     <nav class="range-control" aria-label="Time range">
       <% TelemetryRange::OPTIONS.each do |key, option| %>
         <%= link_to option.fetch(:label),
-          device_path(identifier: @device.identifier, key: collector_key, range: key),
+          device_path(identifier: @device.identifier, range: key),
           class: key == @range.key ? "active" : nil,
           aria: { current: key == @range.key ? "page" : nil } %>
       <% end %>
     </nav>
     <%= link_to "Export CSV",
-      device_path(identifier: @device.identifier, key: collector_key, range: @range.key, format: :csv),
+      device_path(identifier: @device.identifier, range: @range.key, format: :csv),
       class: "export-link" %>
   </section>
 
