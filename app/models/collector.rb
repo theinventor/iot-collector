@@ -9,8 +9,12 @@ class Collector < ApplicationRecord
   has_many :measurements, through: :devices
   has_many :victron_slots, dependent: :destroy
   has_many :victron_discoveries, dependent: :destroy
+  has_many :alert_rules, through: :devices
+  has_many :alert_incidents, through: :alert_rules
+  has_many :notification_channels, dependent: :destroy
 
   validates :key_digest, presence: true, uniqueness: true
+  validate :time_zone_is_valid
 
   def self.find_by_key(key)
     normalized_key = key.to_s
@@ -37,5 +41,13 @@ class Collector < ApplicationRecord
 
   def self.valid_key?(key)
     key.length.between?(MINIMUM_KEY_LENGTH, MAXIMUM_KEY_LENGTH)
+  end
+
+  private
+
+  def time_zone_is_valid
+    Time.find_zone!(time_zone)
+  rescue ArgumentError
+    errors.add(:time_zone, "is not recognized")
   end
 end

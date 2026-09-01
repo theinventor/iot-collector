@@ -53,6 +53,8 @@ class IngestReading
       )
     end
 
+    AlertEvaluator.new(reading: reading, measurements: measurements, now: @now).call
+
     Result.new(device: device, reading: reading, measurements: measurements)
   end
 

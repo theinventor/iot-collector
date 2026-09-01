@@ -65,6 +65,22 @@ https://iot.sunflower-vacations.com/
 
 The dashboard remembers the key in an encrypted, HTTP-only cookie and renews it on every authenticated visit. Access remains available across browser restarts until **Log out** is clicked or the browser's site data is cleared. Existing `?key=...` links remain supported, but redirect immediately to a URL without the key.
 
+## Alerting
+
+Alerting is configured entirely from the web interface. Open a device to create its battery profile and rules, then open **Settings** to add email or webhook notification channels and choose the collector time zone.
+
+Battery presets create editable rules for low state of charge, capacity reserve, low voltage, Victron alarms, and missing telemetry. Each rule supports:
+
+- A warning or critical severity.
+- A sustained trigger window and minimum sample count.
+- A separate recovery threshold and recovery window for hysteresis.
+- Configurable reminder intervals such as `15, 60, 240` minutes.
+- Recovery notifications, acknowledgment, and temporary snoozing.
+
+Every activation creates a new incident. A condition that briefly clears and then breaches again during its recovery window reuses the active incident. Once the recovery window completes, a later breach creates a new incident and starts the reminder schedule again. Notification attempts are stored in SQLite before delivery and retry after 1, 5, 15, and 60 minutes.
+
+Webhook channels send JSON over HTTP or HTTPS. For server safety, the destination must resolve entirely to public IP addresses; loopback, private, link-local, multicast, and reserved networks are rejected.
+
 ## Remote Victron Management
 
 Loggers behind cellular routers or NAT can use the collector as a pull-based control plane. The logger reports unconfigured Victron Bluetooth advertisements and periodically retrieves its desired slot configuration. No inbound connection to the logger is required.
@@ -140,6 +156,13 @@ Production environment variables:
 RAILS_MASTER_KEY=...
 IOT_COLLECTOR_HOST=iot.sunflower-vacations.com
 SQLITE_DATABASE=storage/production.sqlite3
+ALERT_FROM_EMAIL=alerts@your-domain.example
+SMTP_ADDRESS=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+SMTP_AUTHENTICATION=plain
+SMTP_STARTTLS=true
 ```
 
 `IOT_COLLECTOR_INGEST_KEY` is not required for normal operation. When upgrading a database created before multi-tenant collectors, set it to the old ingest key for the first migration so existing devices are assigned to that key.
@@ -151,6 +174,15 @@ Deploy flow:
 3. Add the production environment variables.
 4. Run `bin/rails db:migrate` during deploy.
 5. Enable automatic deploys for pushes or merges to `main`.
+6. Add a Hatchbox cron job named `Process IoT alerts`, scheduled as `* * * * *`, with the command `bin/rails alerts:process`.
+
+Hatchbox runs Rails migrations automatically on the server with the cron role. The alert processor cron job is still required for missing-data detection, reminders, notification delivery, and retries. Threshold state is updated synchronously as telemetry arrives. See the [Hatchbox cron job documentation](https://hatchbox.io/docs/articles/20-cron-jobs) for setup and log troubleshooting.
+
+Run the same processor manually when diagnosing delivery:
+
+```bash
+RAILS_ENV=production bin/rails alerts:process
+```
 
 The production ingest URL is:
 

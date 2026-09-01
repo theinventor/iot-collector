@@ -2,6 +2,9 @@ class Device < ApplicationRecord
   belongs_to :collector
   has_many :readings, dependent: :destroy
   has_many :measurements, dependent: :destroy
+  has_one :battery_profile, dependent: :destroy
+  has_many :alert_rules, dependent: :destroy
+  has_many :alert_incidents, through: :alert_rules
 
   validates :identifier,
     presence: true,
@@ -16,6 +19,10 @@ class Device < ApplicationRecord
     name.presence || identifier
   end
 
+  def to_param
+    identifier
+  end
+
   def latest_reading
     readings.order(recorded_at: :desc, id: :desc).first
   end
@@ -24,5 +31,9 @@ class Device < ApplicationRecord
     measurements.order(recorded_at: :desc, id: :desc).each_with_object({}) do |measurement, latest|
       latest[measurement.name] ||= measurement
     end
+  end
+
+  def active_alert_incidents
+    alert_incidents.where(resolved_at: nil).order(triggered_at: :desc)
   end
 end

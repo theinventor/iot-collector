@@ -12,9 +12,34 @@
         <span class="status-dot <%= @latest_reading&.recorded_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
         <span><%= @latest_reading ? "Updated #{time_ago_in_words(@latest_reading.recorded_at)} ago" : "Waiting for data" %></span>
       </div>
+      <%= link_to "Settings", settings_path, class: "logout-button nav-button" %>
       <%= button_to "Log out", access_path, method: :delete, class: "logout-button", form_class: "logout-form" %>
     </div>
   </header>
+
+  <% if @active_incidents.any? %>
+    <section class="active-alerts-section" aria-labelledby="active-alerts-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Attention</p>
+          <h2 id="active-alerts-heading">Active alerts</h2>
+        </div>
+        <span><%= pluralize(@active_incidents.size, "incident") %></span>
+      </div>
+      <div class="active-alert-list">
+        <% @active_incidents.each do |incident| %>
+          <%= link_to device_path(incident.device, anchor: "active-alerts"), class: "active-alert-row #{incident.alert_rule.severity}" do %>
+            <span class="severity-marker"></span>
+            <span class="alert-row-main">
+              <strong><%= incident.alert_rule.name %></strong>
+              <small><%= incident.device.display_name %> &middot; <%= alert_value(incident) %></small>
+            </span>
+            <span class="status-badge <%= incident.alert_rule.severity %>"><%= incident.display_status %></span>
+          <% end %>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
 
   <% if @devices.any? %>
     <section class="device-grid" aria-label="Collector devices">
@@ -23,13 +48,14 @@
         <% latest_measurements = device.latest_measurements %>
 
         <article class="device-card">
+          <% device_alerts = @active_incidents_by_device.fetch(device.id, []) %>
           <div class="device-card-header">
             <div>
               <p class="device-identifier"><%= device.identifier %></p>
               <h2><%= link_to device.display_name, device_path(identifier: device.identifier) %></h2>
             </div>
-            <span class="device-state <%= device.last_seen_at&.after?(15.minutes.ago) ? "online" : "idle" %>">
-              <%= device.last_seen_at&.after?(15.minutes.ago) ? "Online" : "Idle" %>
+            <span class="device-state <%= if device_alerts.any? { |incident| incident.alert_rule.severity == "critical" }; "critical" elsif device_alerts.any?; "warning" elsif device.last_seen_at&.after?(15.minutes.ago); "online" else "idle" end %>">
+              <%= if device_alerts.any? { |incident| incident.alert_rule.severity == "critical" }; "Critical" elsif device_alerts.any?; "Warning" elsif device.last_seen_at&.after?(15.minutes.ago); "Online" else "Idle" end %>
             </span>
           </div>
 

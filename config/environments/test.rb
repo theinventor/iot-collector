@@ -28,6 +28,10 @@ Rails.application.configure do
   # Disable request forgery protection in test environment.
   config.action_controller.allow_forgery_protection = false
 
+  config.action_mailer.delivery_method = :test
+  config.action_mailer.perform_deliveries = true
+  config.action_mailer.default_url_options = { host: "example.com", protocol: "https" }
+
   # Print deprecation notices to the stderr.
   config.active_support.deprecation = :stderr
 

@@ -1,0 +1,10 @@
+<% content_for :title, "Add notification channel" %>
+
+<main class="shell editor-shell">
+  <header class="editor-header">
+    <%= link_to "Alert settings", settings_path, class: "back-link" %>
+    <p class="eyebrow">Delivery</p>
+    <h1>Add notification channel</h1>
+  </header>
+  <%= render "form", notification_channel: @notification_channel %>
+</main>

@@ -1,0 +1,72 @@
+<% content_for :title, "Alert settings" %>
+
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <%= link_to "All devices", root_path, class: "back-link" %>
+      <p class="eyebrow">IoT Collector</p>
+      <h1>Alert settings</h1>
+    </div>
+    <div class="topbar-actions">
+      <%= button_to "Log out", access_path, method: :delete, class: "logout-button", form_class: "logout-form" %>
+    </div>
+  </header>
+
+  <section class="settings-section" aria-labelledby="collector-settings-heading">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Collector</p>
+        <h2 id="collector-settings-heading">Time zone</h2>
+      </div>
+    </div>
+    <%= form_with model: @collector, url: settings_path, method: :patch, class: "compact-form" do |form| %>
+      <%= render "shared/form_errors", record: @collector %>
+      <div class="form-grid form-grid-action">
+        <div class="field">
+          <%= form.label :time_zone %>
+          <%= form.select :time_zone, time_zone_options, {}, required: true %>
+        </div>
+        <%= form.submit "Save time zone", class: "primary-button" %>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="settings-section" aria-labelledby="channels-heading">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Delivery</p>
+        <h2 id="channels-heading">Notification channels</h2>
+      </div>
+      <div class="button-row">
+        <%= link_to "Add email", new_notification_channel_path(kind: "email"), class: "secondary-button" %>
+        <%= link_to "Add webhook", new_notification_channel_path(kind: "webhook"), class: "secondary-button" %>
+      </div>
+    </div>
+
+    <% if @notification_channels.any? %>
+      <div class="channel-list">
+        <% @notification_channels.each do |channel| %>
+          <article class="channel-row">
+            <div>
+              <div class="row-title">
+                <h3><%= channel.label %></h3>
+                <span class="status-badge <%= channel.enabled? ? "normal" : "disabled" %>"><%= channel.enabled? ? "Enabled" : "Disabled" %></span>
+              </div>
+              <p><%= NotificationChannel::KINDS.fetch(channel.kind) %> &middot; <%= channel.masked_destination %> &middot; <%= channel.minimum_severity.titleize %> and above</p>
+              <% if channel.quiet_hours_start.present? %>
+                <p>Quiet <%= channel.quiet_start %>-<%= channel.quiet_end %> &middot; Critical bypass <%= channel.critical_bypass? ? "on" : "off" %></p>
+              <% end %>
+            </div>
+            <div class="row-actions">
+              <%= button_to "Test", test_notification_channel_path(channel), method: :post, class: "text-button" %>
+              <%= link_to "Edit", edit_notification_channel_path(channel), class: "text-button" %>
+              <%= button_to "Remove", notification_channel_path(channel), method: :delete, class: "text-button danger", form: { data: { turbo_confirm: "Remove this notification channel?" } } %>
+            </div>
+          </article>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="empty-line">No notification channels configured.</p>
+    <% end %>
+  </section>
+</main>
