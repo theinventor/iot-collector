@@ -8,6 +8,10 @@ class DevicesController < ApplicationController
     @latest_measurements = @device.latest_measurements
     @readings = @range.apply(@device.readings).recent.includes(:measurements).limit(100)
     @numeric_metric_names = @report.series.map(&:name)
+    @battery_profile = @device.battery_profile || @device.build_battery_profile
+    @alert_rules = @device.alert_rules.includes(:alert_rule_state, alert_incidents: :notification_deliveries).order(enabled: :desc, severity: :desc, name: :asc)
+    @active_incidents = @device.active_alert_incidents.includes(:alert_rule)
+    @incidents = @device.alert_incidents.includes(:alert_rule).recent.limit(25)
 
     respond_to do |format|
       format.html

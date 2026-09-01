@@ -3,7 +3,21 @@ Rails.application.routes.draw do
 
   get "up" => "rails/health#show", as: :rails_health_check
   resource :access, only: [ :create, :destroy ], controller: "collector_access"
-  get "devices/:identifier" => "devices#show", as: :device
+  resource :settings, only: [ :show, :update ]
+  resources :notification_channels, only: [ :new, :create, :edit, :update, :destroy ] do
+    post :test, on: :member
+  end
+  resources :devices, only: :show, param: :identifier do
+    resource :battery_profile, only: [ :create, :update, :destroy ]
+    resources :alert_rules, only: [ :new, :create, :edit, :update ] do
+      post :toggle, on: :member
+    end
+    resource :alert_presets, only: :create
+    resources :alert_incidents, only: [] do
+      post :acknowledge, on: :member
+      post :snooze, on: :member
+    end
+  end
 
   namespace :api do
     namespace :v1 do

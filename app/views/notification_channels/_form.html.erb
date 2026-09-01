@@ -1,0 +1,43 @@
+<%= form_with model: notification_channel, class: "editor-form" do |form| %>
+  <%= render "shared/form_errors", record: notification_channel %>
+
+  <div class="form-grid">
+    <div class="field">
+      <%= form.label :kind, "Channel type" %>
+      <%= form.select :kind, NotificationChannel::KINDS.map { |value, label| [ label, value ] } %>
+    </div>
+    <div class="field">
+      <%= form.label :label %>
+      <%= form.text_field :label, required: true, maxlength: 100, autocomplete: "off" %>
+    </div>
+    <div class="field field-wide">
+      <%= form.label :destination, notification_channel.kind == "webhook" ? "Webhook URL" : "Email address" %>
+      <%= form.text_field :destination, required: true, maxlength: 1_000, autocomplete: notification_channel.kind == "email" ? "email" : "url" %>
+    </div>
+    <div class="field">
+      <%= form.label :minimum_severity %>
+      <%= form.select :minimum_severity, [ [ "Warning and critical", "warning" ], [ "Critical only", "critical" ] ] %>
+    </div>
+    <div class="field checkbox-field">
+      <%= form.check_box :enabled %>
+      <%= form.label :enabled %>
+    </div>
+    <div class="field">
+      <%= form.label :quiet_start, "Quiet hours start" %>
+      <%= form.time_field :quiet_start %>
+    </div>
+    <div class="field">
+      <%= form.label :quiet_end, "Quiet hours end" %>
+      <%= form.time_field :quiet_end %>
+    </div>
+    <div class="field checkbox-field field-wide">
+      <%= form.check_box :critical_bypass %>
+      <%= form.label :critical_bypass, "Critical alerts bypass quiet hours" %>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <%= form.submit class: "primary-button" %>
+    <%= link_to "Cancel", settings_path, class: "secondary-button" %>
+  </div>
+<% end %>

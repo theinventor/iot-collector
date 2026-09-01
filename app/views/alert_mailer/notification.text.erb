@@ -1,0 +1,12 @@
+<%= @event_label %>: <%= @payload.dig(:alert, :rule) || "IoT Collector notification" %>
+
+<% if @delivery.event_type == "test" %>
+This notification channel is working.
+<% else %>
+Device: <%= @payload.dig(:device, :name) %>
+Severity: <%= @payload[:severity].to_s.titleize %>
+Condition: <%= @payload.dig(:alert, :condition) %>
+Current value: <%= @payload.dig(:alert, :current_value) || "No data" %>
+
+<%= device_url(identifier: @payload.dig(:device, :identifier)) %>
+<% end %>

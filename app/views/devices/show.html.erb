@@ -12,6 +12,7 @@
         <span class="status-dot <%= @device.last_seen_at&.after?(15.minutes.ago) ? "online" : "idle" %>"></span>
         <span><%= @device.last_seen_at ? "Seen #{time_ago_in_words(@device.last_seen_at)} ago" : "Never seen" %></span>
       </div>
+      <%= link_to "Settings", settings_path, class: "logout-button nav-button" %>
       <%= button_to "Log out", access_path, method: :delete, class: "logout-button", form_class: "logout-form" %>
     </div>
   </header>
@@ -29,6 +30,38 @@
       device_path(identifier: @device.identifier, range: @range.key, format: :csv),
       class: "export-link" %>
   </section>
+
+  <% if @active_incidents.any? %>
+    <section id="active-alerts" class="active-alerts-section device-alerts" aria-labelledby="device-active-alerts-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Attention</p>
+          <h2 id="device-active-alerts-heading">Active alerts</h2>
+        </div>
+        <span><%= pluralize(@active_incidents.size, "incident") %></span>
+      </div>
+      <div class="active-alert-list">
+        <% @active_incidents.each do |incident| %>
+          <article class="active-alert-row <%= incident.alert_rule.severity %>">
+            <span class="severity-marker"></span>
+            <span class="alert-row-main">
+              <strong><%= incident.alert_rule.name %></strong>
+              <small><%= alert_value(incident) %> &middot; active <%= time_ago_in_words(incident.triggered_at) %></small>
+            </span>
+            <span class="status-badge <%= incident.alert_rule.severity %>"><%= incident.display_status %></span>
+            <div class="row-actions">
+              <% unless incident.acknowledged? %>
+                <%= button_to "Acknowledge", acknowledge_device_alert_incident_path(@device, incident), method: :post, class: "text-button" %>
+              <% end %>
+              <% unless incident.acknowledged? %>
+                <%= button_to "Snooze 1h", snooze_device_alert_incident_path(@device, incident), method: :post, params: { minutes: 60 }, class: "text-button" %>
+              <% end %>
+            </div>
+          </article>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
 
   <section class="latest-section" aria-labelledby="latest-heading">
     <div class="section-heading">
@@ -53,6 +86,136 @@
       <p class="empty-line">No measurements yet.</p>
     <% end %>
   </section>
+
+  <section id="battery-profile" class="settings-section" aria-labelledby="battery-profile-heading">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Battery</p>
+        <h2 id="battery-profile-heading">Battery profile</h2>
+      </div>
+      <% if @battery_profile.persisted? && @battery_profile.rated_capacity_ah && @latest_measurements["state_of_charge"]&.numeric_value %>
+        <span>Estimated remaining <%= metric_value(@battery_profile.estimated_remaining_ah(@latest_measurements["state_of_charge"].numeric_value), "Ah") %></span>
+      <% end %>
+    </div>
+
+    <%= form_with model: @battery_profile,
+      url: device_battery_profile_path(@device),
+      method: @battery_profile.persisted? ? :patch : :post,
+      class: "compact-form" do |form| %>
+      <%= render "shared/form_errors", record: @battery_profile %>
+      <div class="form-grid battery-form-grid">
+        <div class="field">
+          <%= form.label :chemistry %>
+          <%= form.select :chemistry, BatteryProfile::CHEMISTRIES.map { |value, label| [ label, value ] } %>
+        </div>
+        <div class="field">
+          <%= form.label :nominal_voltage, "Nominal voltage" %>
+          <%= form.number_field :nominal_voltage, min: 1, step: "0.1", placeholder: "12" %>
+        </div>
+        <div class="field">
+          <%= form.label :rated_capacity_ah, "Rated capacity (Ah)" %>
+          <%= form.number_field :rated_capacity_ah, min: 1, step: "0.1", placeholder: "400" %>
+        </div>
+        <div class="field">
+          <%= form.label :usable_capacity_percent, "Usable capacity (%)" %>
+          <%= form.number_field :usable_capacity_percent, min: 1, max: 100, step: "0.1" %>
+        </div>
+        <div class="field">
+          <%= form.label :reserve_percent, "Reserve (%)" %>
+          <%= form.number_field :reserve_percent, min: 0, max: 99, step: "0.1" %>
+        </div>
+        <div class="field">
+          <%= form.label :low_voltage_warning, "Low-voltage warning" %>
+          <%= form.number_field :low_voltage_warning, min: 1, step: "0.01" %>
+        </div>
+        <div class="field">
+          <%= form.label :low_voltage_critical, "Low-voltage critical" %>
+          <%= form.number_field :low_voltage_critical, min: 1, step: "0.01" %>
+        </div>
+        <div class="field form-submit-field">
+          <%= form.submit "Save battery profile", class: "primary-button" %>
+        </div>
+      </div>
+    <% end %>
+  </section>
+
+  <section id="alerts" class="settings-section" aria-labelledby="alert-rules-heading">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Monitoring</p>
+        <h2 id="alert-rules-heading">Alert rules</h2>
+      </div>
+      <div class="button-row">
+        <%= button_to "Install battery presets", device_alert_presets_path(@device), method: :post, class: "secondary-button" %>
+        <%= link_to "Add threshold", new_device_alert_rule_path(@device, rule_type: "threshold"), class: "secondary-button" %>
+        <%= link_to "Add missing-data rule", new_device_alert_rule_path(@device, rule_type: "missing_data"), class: "secondary-button" %>
+      </div>
+    </div>
+
+    <% if @alert_rules.any? %>
+      <div class="table-wrap bordered-table">
+        <table class="alert-rules-table">
+          <thead>
+            <tr>
+              <th>Rule</th>
+              <th>Condition</th>
+              <th>Windows</th>
+              <th>State</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @alert_rules.each do |rule| %>
+              <tr>
+                <td data-label="Rule">
+                  <strong><%= rule.name %></strong>
+                  <span class="status-badge <%= rule.severity %>"><%= rule.severity.titleize %></span>
+                </td>
+                <td data-label="Condition"><%= rule.condition_description %></td>
+                <td data-label="Windows"><%= duration_minutes(rule.trigger_after_seconds) %> / <%= duration_minutes(rule.recovery_after_seconds) %></td>
+                <td data-label="State"><span class="status-badge <%= rule.enabled? ? alert_state_label(rule).downcase : "disabled" %>"><%= rule.enabled? ? alert_state_label(rule) : "Disabled" %></span></td>
+                <td data-label="Actions">
+                  <div class="row-actions">
+                    <%= link_to "Edit", edit_device_alert_rule_path(@device, rule), class: "text-button" %>
+                    <%= button_to rule.enabled? ? "Disable" : "Enable", toggle_device_alert_rule_path(@device, rule), method: :post, class: "text-button" %>
+                  </div>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <p class="empty-line">No alert rules configured.</p>
+    <% end %>
+  </section>
+
+  <% if @incidents.any? %>
+    <section class="settings-section" aria-labelledby="incident-history-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">History</p>
+          <h2 id="incident-history-heading">Alert incidents</h2>
+        </div>
+      </div>
+      <div class="table-wrap bordered-table">
+        <table>
+          <thead><tr><th>Started</th><th>Alert</th><th>Value</th><th>Status</th><th>Resolved</th></tr></thead>
+          <tbody>
+            <% @incidents.each do |incident| %>
+              <tr>
+                <td><%= l(incident.triggered_at, format: :short) %></td>
+                <td><%= incident.alert_rule.name %></td>
+                <td><%= alert_value(incident) %></td>
+                <td><span class="status-badge <%= incident.alert_rule.severity %>"><%= incident.display_status %></span></td>
+                <td><%= incident.resolved_at ? l(incident.resolved_at, format: :short) : "-" %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  <% end %>
 
   <section class="charts-section" aria-labelledby="history-heading">
     <div class="section-heading">
@@ -109,7 +272,7 @@
         <p class="eyebrow">Raw samples</p>
         <h2>Recent readings</h2>
       </div>
-      <span><%= pluralize(@readings.size, "shown") %></span>
+      <span><%= @readings.size %> shown</span>
     </div>
 
     <% if @readings.any? %>

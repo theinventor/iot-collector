@@ -1,0 +1,15 @@
+<p style="margin:0 0 6px;color:#66737b;font-size:12px;font-weight:bold;text-transform:uppercase"><%= @event_label %></p>
+<h1 style="margin:0 0 18px;font-size:24px"><%= @payload.dig(:alert, :rule) || "IoT Collector notification" %></h1>
+
+<% if @delivery.event_type == "test" %>
+  <p style="margin:0">This notification channel is working.</p>
+<% else %>
+  <table style="width:100%;border-collapse:collapse">
+    <tr><td style="padding:8px 0;color:#66737b">Device</td><td style="padding:8px 0;text-align:right;font-weight:bold"><%= @payload.dig(:device, :name) %></td></tr>
+    <tr><td style="padding:8px 0;color:#66737b">Severity</td><td style="padding:8px 0;text-align:right;font-weight:bold"><%= @payload[:severity].to_s.titleize %></td></tr>
+    <tr><td style="padding:8px 0;color:#66737b">Condition</td><td style="padding:8px 0;text-align:right;font-weight:bold"><%= @payload.dig(:alert, :condition) %></td></tr>
+    <tr><td style="padding:8px 0;color:#66737b">Current value</td><td style="padding:8px 0;text-align:right;font-weight:bold"><%= @payload.dig(:alert, :current_value) || "No data" %></td></tr>
+  </table>
+
+  <p style="margin:20px 0 0"><%= link_to "Open device", device_url(identifier: @payload.dig(:device, :identifier)), style: "color:#087e73;font-weight:bold" %></p>
+<% end %>

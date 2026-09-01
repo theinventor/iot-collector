@@ -53,6 +53,20 @@ Rails.application.configure do
   # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
 
+  config.action_mailer.default_url_options = {
+    host: ENV.fetch("IOT_COLLECTOR_HOST", "iot.sunflower-vacations.com"),
+    protocol: "https"
+  }
+  config.action_mailer.delivery_method = :smtp
+  config.action_mailer.smtp_settings = {
+    address: ENV.fetch("SMTP_ADDRESS", "localhost"),
+    port: ENV.fetch("SMTP_PORT", 587).to_i,
+    user_name: ENV["SMTP_USERNAME"],
+    password: ENV["SMTP_PASSWORD"],
+    authentication: ENV.fetch("SMTP_AUTHENTICATION", "plain"),
+    enable_starttls_auto: ENV.fetch("SMTP_STARTTLS", "true") == "true"
+  }
+
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 

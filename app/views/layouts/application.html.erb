@@ -23,6 +23,12 @@
   </head>
 
   <body>
+    <% if flash[:notice].present? || flash[:alert].present? %>
+      <div class="flash-stack" aria-live="polite">
+        <% if flash[:notice].present? %><p class="flash notice"><%= flash[:notice] %></p><% end %>
+        <% if flash[:alert].present? %><p class="flash alert"><%= flash[:alert] %></p><% end %>
+      </div>
+    <% end %>
     <%= yield %>
   </body>
 </html>

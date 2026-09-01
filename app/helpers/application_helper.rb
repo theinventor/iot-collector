@@ -37,4 +37,28 @@ module ApplicationHelper
     formatted = number_with_precision(value, precision: 3, strip_insignificant_zeros: true, delimiter: ",")
     unit.present? ? "#{formatted} #{unit}" : formatted
   end
+
+  def alert_state_label(rule, now: Time.current)
+    state = rule.alert_rule_state || AlertRuleState.new(status: "normal")
+    incident = state.active_incident
+    return incident.display_status if incident&.active?
+
+    state.status.titleize
+  end
+
+  def alert_value(incident)
+    return "No telemetry" if incident.last_value.nil?
+
+    unit = incident.device.measurements.where(name: incident.alert_rule.metric_name).where.not(unit: nil).order(recorded_at: :desc).pick(:unit)
+    metric_value(incident.last_value, unit)
+  end
+
+  def duration_minutes(value)
+    minutes = value.to_i / 60
+    minutes == 1 ? "1 minute" : "#{minutes} minutes"
+  end
+
+  def time_zone_options
+    ActiveSupport::TimeZone.all.map { |zone| [ zone.to_s, zone.name ] }
+  end
 end

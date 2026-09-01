@@ -1,0 +1,10 @@
+<% content_for :title, "Add alert rule" %>
+
+<main class="shell editor-shell">
+  <header class="editor-header">
+    <%= link_to @device.display_name, device_path(@device, anchor: "alerts"), class: "back-link" %>
+    <p class="eyebrow">Alerts</p>
+    <h1>Add alert rule</h1>
+  </header>
+  <%= render "form", device: @device, alert_rule: @alert_rule %>
+</main>

@@ -1,0 +1,73 @@
+<%= form_with model: [ device, alert_rule ], class: "editor-form" do |form| %>
+  <%= render "shared/form_errors", record: alert_rule %>
+
+  <div class="form-grid">
+    <div class="field field-wide">
+      <%= form.label :name %>
+      <%= form.text_field :name, required: true, maxlength: 100, autofocus: true %>
+    </div>
+    <%= form.hidden_field :rule_type %>
+    <div class="field">
+      <span class="field-label">Rule type</span>
+      <span class="readonly-value"><%= AlertRule::RULE_TYPES.fetch(alert_rule.rule_type) %></span>
+    </div>
+    <div class="field">
+      <%= form.label :severity %>
+      <%= form.select :severity, [ [ "Warning", "warning" ], [ "Critical", "critical" ] ] %>
+    </div>
+    <% if alert_rule.threshold_rule? %>
+      <div class="field">
+        <%= form.label :metric_name, "Metric" %>
+        <%= form.text_field :metric_name, list: "metric-names", autocomplete: "off" %>
+        <datalist id="metric-names">
+          <% metric_names.each do |name| %><option value="<%= name %>"><% end %>
+        </datalist>
+      </div>
+      <div class="field">
+        <%= form.label :comparison %>
+        <%= form.select :comparison, AlertRule::COMPARISONS.map { |value, label| [ label, value ] }, include_blank: true %>
+      </div>
+      <div class="field">
+        <%= form.label :threshold, "Trigger threshold" %>
+        <%= form.number_field :threshold, step: "any" %>
+      </div>
+      <div class="field">
+        <%= form.label :upper_threshold, "Upper trigger threshold" %>
+        <%= form.number_field :upper_threshold, step: "any" %>
+      </div>
+      <div class="field">
+        <%= form.label :recovery_threshold, "Recovery threshold" %>
+        <%= form.number_field :recovery_threshold, step: "any" %>
+      </div>
+      <div class="field">
+        <%= form.label :recovery_upper_threshold, "Upper recovery threshold" %>
+        <%= form.number_field :recovery_upper_threshold, step: "any" %>
+      </div>
+    <% end %>
+    <div class="field">
+      <%= form.label :trigger_after_minutes, "Trigger window (minutes)" %>
+      <%= form.number_field :trigger_after_minutes, min: 0, max: 43_200, step: "0.5", required: true %>
+    </div>
+    <div class="field">
+      <%= form.label :recovery_after_minutes, "Recovery window (minutes)" %>
+      <%= form.number_field :recovery_after_minutes, min: 0, max: 43_200, step: "0.5", required: true %>
+    </div>
+    <div class="field">
+      <%= form.label :minimum_samples %>
+      <%= form.number_field :minimum_samples, min: 1, max: 100, required: true %>
+    </div>
+    <div class="field">
+      <%= form.label :reminder_minutes, "Reminder backoff (minutes)" %>
+      <%= form.text_field :reminder_minutes, placeholder: "15, 60, 240", inputmode: "numeric", autocomplete: "off" %>
+    </div>
+    <div class="field checkbox-field field-wide">
+      <%= form.check_box :notify_recovery %>
+      <%= form.label :notify_recovery, "Send a recovery notification" %>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <%= form.submit class: "primary-button" %>
+    <%= link_to "Cancel", device_path(device, anchor: "alerts"), class: "secondary-button" %>
+  </div>
+<% end %>
