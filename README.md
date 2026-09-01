@@ -69,7 +69,9 @@ The dashboard remembers the key in an encrypted, HTTP-only cookie and renews it 
 
 Alerting is configured entirely from the web interface. Open a device to create its battery profile and rules, then open **Settings** to add email or webhook notification channels and choose the collector time zone.
 
-Battery presets create editable rules for low state of charge, capacity reserve, low voltage, Victron alarms, and missing telemetry. Each rule supports:
+Battery presets create editable rules for low state of charge, capacity reserve, low voltage, Victron alarms, and missing telemetry. The missing-telemetry preset waits 30 minutes by default so brief Bluetooth reception gaps do not create nuisance alarms. The window remains editable per device.
+
+Each rule supports:
 
 - A warning or critical severity.
 - A sustained trigger window and minimum sample count.

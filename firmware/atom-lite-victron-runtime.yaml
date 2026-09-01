@@ -455,7 +455,8 @@ esp32_ble_tracker:
   scan_parameters:
     active: false
     interval: 320ms
-    window: 100ms
+    # Weak Victron advertisements need near-continuous coverage in an RV.
+    window: 300ms
   on_ble_advertise:
     then:
       - lambda: |-
