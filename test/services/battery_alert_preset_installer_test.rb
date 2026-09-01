@@ -24,8 +24,24 @@ class BatteryAlertPresetInstallerTest < ActiveSupport::TestCase
     assert_equal BigDecimal("-320"), reserve.threshold
     assert_equal "critical", reserve.severity
 
+    telemetry = @device.alert_rules.find_by!(preset_key: "telemetry_missing")
+    assert_equal 30.minutes.to_i, telemetry.trigger_after_seconds
+
     voltage = @device.alert_rules.find_by!(preset_key: "low_voltage_warning")
     assert_equal BigDecimal("12.2"), voltage.threshold
     assert_operator voltage.recovery_threshold, :>, voltage.threshold
+  end
+
+  test "missing telemetry preset ignores brief Bluetooth reception gaps" do
+    BatteryAlertPresetInstaller.new(@device).call
+    last_seen_at = Time.zone.parse("2026-09-01 12:00:00")
+    @device.update!(last_seen_at: last_seen_at)
+    rule = @device.alert_rules.find_by!(preset_key: "telemetry_missing")
+
+    MissingDataAlertEvaluator.new(now: last_seen_at + 25.minutes).call
+    assert_equal "normal", rule.state_record.reload.status
+
+    MissingDataAlertEvaluator.new(now: last_seen_at + 30.minutes + 1.second).call
+    assert_equal "active", rule.state_record.reload.status
   end
 end

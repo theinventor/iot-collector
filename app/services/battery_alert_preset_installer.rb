@@ -34,7 +34,7 @@ class BatteryAlertPresetInstaller
       name: "Shunt telemetry missing",
       rule_type: "missing_data",
       severity: "warning",
-      trigger_after_seconds: 10.minutes.to_i,
+      trigger_after_seconds: 30.minutes.to_i,
       recovery_after_seconds: 5.minutes.to_i,
       minimum_samples: 2
     )
