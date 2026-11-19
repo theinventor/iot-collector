@@ -7,7 +7,8 @@ gem "propshaft"
 # Use sqlite3 as the database for Active Record
 gem "sqlite3", ">= 2.1"
 # Use the Puma web server [https://github.com/puma/puma]
-gem "puma", ">= 5.0"
+# Stay on 8.0.x. 8.0.4 includes the Nov 2026 DoS/TLS fixes; 8.1 changes request parsing.
+gem "puma", "~> 8.0.4"
 
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 # gem "bcrypt", "~> 3.1.7"
